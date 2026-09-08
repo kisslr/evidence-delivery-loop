@@ -155,5 +155,59 @@ class InjectionResistanceTests(unittest.TestCase):
         self.assertIn("do not extract passwords", SKILL)
 
 
+class AbortAndRecoveryTests(unittest.TestCase):
+    def test_abort_conditions_are_documented(self):
+        self.assertIn("aborted", SKILL)
+        self.assertIn("Stop the loop early", SKILL)
+
+    def test_partial_material_handling(self):
+        self.assertIn("blocked", SKILL)
+        self.assertIn("missing", SKILL.lower())
+
+    def test_scope_change_does_not_restart(self):
+        self.assertIn("Do not silently restart", SKILL)
+
+    def test_processor_error_recovery(self):
+        self.assertIn("fails at runtime", ROUTING)
+        self.assertIn("does not abort", ROUTING)
+
+
+class ExtendedFormatRoutingTests(unittest.TestCase):
+    def test_archive_formats_routed(self):
+        for fmt in ("ZIP", "TAR", "RAR", "7z"):
+            self.assertIn(fmt, ROUTING, f"{fmt} missing from routing table")
+
+    def test_image_formats_routed(self):
+        for fmt in ("PNG", "JPG", "SVG"):
+            self.assertIn(fmt, ROUTING, f"{fmt} missing from routing table")
+
+    def test_audio_video_out_of_scope(self):
+        self.assertIn("out of scope", ROUTING.lower())
+
+    def test_email_formats_routed(self):
+        self.assertIn("MSG", ROUTING)
+        self.assertIn("EML", ROUTING)
+
+
+class OutputScalingTests(unittest.TestCase):
+    def test_output_scales_with_material_count(self):
+        self.assertIn("Scale response detail", OUTPUT)
+
+    def test_large_sets_use_file_output(self):
+        import re
+        self.assertTrue(
+            re.search(r"complete\s+report\s+in\s+a\s+file", OUTPUT),
+            "output-contract must direct large reports to a file",
+        )
+
+
+class MultiLanguageTests(unittest.TestCase):
+    def test_output_language_follows_request(self):
+        self.assertIn("output language", SKILL.lower())
+
+    def test_mixed_language_quoting(self):
+        self.assertIn("original language", SKILL)
+
+
 if __name__ == "__main__":
     unittest.main()

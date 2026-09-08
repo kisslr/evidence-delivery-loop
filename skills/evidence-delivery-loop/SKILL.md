@@ -41,6 +41,8 @@ Accept any of these inputs:
 - a user-authorized browser session for a login-gated course or service.
 
 Infer the goal, language, likely format, and desired delivery location from the request.
+Match the output language to the user's request language. When materials mix languages,
+quote each source in its original language and translate only when the user asks.
 Ask only for missing information that materially changes safety, scope, or acceptance.
 Start with a short scope echo: target outcome, inputs found, inputs missing, proposed
 permission level, and the first reversible action.
@@ -49,7 +51,23 @@ When no material is supplied, return a material request checklist and a pre-audi
 Do not fabricate findings, citations, file names, screenshots, measurements, or
 completion status.
 
+When only part of the expected material is available, audit what is present and label
+each missing item as blocked with the reason. List found, missing, and pending items
+in the scope echo. Continue the workflow unless a missing item is a prerequisite for
+auditing the available ones; in that case, state the dependency and request the
+missing material before proceeding.
+
 ## Workflow
+
+Stop the loop early and report what was completed when: the user cancels; every
+supplied material is unreadable or empty; a required authorization is denied and no
+alternative path exists; or a processor error blocks all remaining stages. Label the
+run as aborted, list completed stages, and state what is needed to resume.
+
+If the user adds material or changes requirements mid-workflow, inventory and audit
+only the new or affected material, merge results into the existing findings, and
+re-evaluate the plan from stage 4. Mark earlier findings that relied on the old scope.
+Do not silently restart the full loop.
 
 ### 1. Inventory and route
 
