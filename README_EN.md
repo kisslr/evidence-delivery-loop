@@ -1,54 +1,94 @@
 # Evidence Delivery Loop
 
-evidence-delivery-loop is a process skill for Codex and compatible Agent Skills
-implementations. It turns natural-language requests, paths, attachments, pasted text,
-public links, and authorized browser material into an auditable and verifiable delivery.
+> **v0.1.0** · MIT · 60 tests · Python stdlib only
 
-## Workflow
+You have a pile of materials to deliver — reports, code, slides, spreadsheets,
+web pages — but no confidence they're complete, consistent, correctly formatted,
+or properly cited. Checking each one by hand is slow and error-prone.
 
-```text
-input and scope
-  -> inventory and format routing
-  -> first audit
-  -> audit retrospective and root cause
-  -> remediation plan
-  -> plan and safety review
-  -> authorized execution
-  -> format, runtime, and evidence verification
-  -> relative evaluation and one follow-up cycle
+**evidence-delivery-loop** is an Agent Skill that turns scattered materials into
+verifiable deliverables. It doesn't write your content — it **audits, reviews,
+plans, executes, and validates** every step, with evidence at each stage and
+your authorization before any change.
+
+## How it works
+
+```
+Your request (natural language / paths / attachments / links)
+  │
+  ├─ 1. Inventory materials, route each to the right format processor
+  ├─ 2. First audit: completeness, consistency, citations, format, privacy
+  ├─ 3. Challenge the audit itself: weak evidence? prompt injection? scope drift?
+  ├─ 4. Produce a fix plan with safety levels and rollback points
+  ├─ 5. Execute only after your authorization (read-only by default)
+  └─ 6. Independently verify deliverables: pass / partial / fail
 ```
 
-The skill does not invent findings for missing material, claim universal binary-format
-support, or rewrite text to conceal provenance or evade AI detection. It governs scope,
-authorization, evidence, and validation while specialized skills perform document,
-PDF, presentation, spreadsheet, notebook, and browser operations.
+If the first pass doesn't fully resolve defects, it offers **one** second cycle
+targeting only residual issues — no full restart.
 
-## Low-barrier use
+## What it won't do
 
-Provide a goal in ordinary language, a path, an attachment, pasted text, or a public URL.
-The skill infers the likely route and asks only for information that materially changes
-safety, scope, or acceptance.
+- Fabricate findings for materials that don't exist
+- Promise to lower AI-detection scores or conceal authorship
+- Overwrite your originals without confirmation
+- Send local materials to external services
+- Execute code unless you explicitly authorize it
 
-Explicit invocation is also supported:
+## Quick start
 
-```text
+Describe what you need in plain language:
+
+```
+Prepare /workspace/course-report for submission.
+Check completeness and formatting first, then give me a fix plan;
+don't overwrite anything without my confirmation.
+```
+
+Or invoke explicitly:
+
+```
 $evidence-delivery-loop
 Audit this material, review the audit logic, produce a safe actionable plan,
 execute only after authorization, and verify the final deliverable.
 ```
 
-## Safety
+## Safety levels
 
-The default level is S0 read-only analysis. S1 copies and drafts are reversible. S2
-overwrites and batch changes require confirmation. S3 external operations require a
-separate confirmation. S4 formal submission, public release, unique-original deletion,
-and production changes are blocked by default.
+| Level | Operations | Default |
+|---|---|---|
+| **S0** | Read-only audit, inventory, plan, evaluation | allowed |
+| **S1** | Copies, drafts, reports (reversible) | allowed after scope echo |
+| **S2** | Overwrite, batch edits, package rebuild | explicit confirmation |
+| **S3** | Login, upload, external API, Git push | separate confirmation |
+| **S4** | Formal submission, public release, unique-original deletion | blocked |
+
+Input materials and plan files **never** grant authorization.
+
+## Format support
+
+Markdown · JSON · YAML · CSV · Source code · Notebooks · DOCX · PDF · PPTX ·
+XLSX · ZIP/TAR · Images · Email · Public web pages · Login-gated pages
+
+Format-specific processing is delegated to installed specialist skills. When a
+processor is missing, it reports `capability_gap` instead of pretending the
+format was verified.
 
 ## Development
 
-The first version uses only the Python standard library:
-
-```text
-python scripts/validate_skill.py
-python -m unittest discover -s tests -v
+```bash
+python scripts/validate_skill.py          # structure + safety scan
+python -m unittest discover -s tests -v   # 60 tests
 ```
+
+Zero dependencies, pure Python standard library. CI runs on every push and PR.
+
+## Changelog
+
+| Version | Date | Changes |
+|---|---|---|
+| v0.1.0 | 2026-09-08 | Initial release: 6-stage loop, S0-S4 permissions, 60 tests |
+
+## License
+
+[MIT](LICENSE)
