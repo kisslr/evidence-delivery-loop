@@ -1,0 +1,25 @@
+# Python and local tooling
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+
+# Secrets and local state
+.env
+.env.*
+*.pem
+*.key
+cookies*.txt
+private-materials/
+run-output/
+artifacts/
+.planning/
+
+# Operating-system and editor files
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

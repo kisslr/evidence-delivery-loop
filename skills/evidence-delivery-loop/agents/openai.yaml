@@ -1,0 +1,6 @@
+interface:
+  display_name: "证据交付闭环"
+  short_description: "跨材料审计与计划复盘，支持授权执行、验证和交付闭环"
+  default_prompt: "使用 $evidence-delivery-loop 审计并改进我的材料，先复盘、规划和审核，再按授权执行并验证。"
+policy:
+  allow_implicit_invocation: true
