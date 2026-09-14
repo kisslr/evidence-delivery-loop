@@ -1,16 +1,18 @@
-"""Dependency-free structural and safety checks for the repository skill."""
+"""Dependency-free structural, safety, and release-contract checks for the skill."""
 
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import re
 import sys
 from pathlib import Path
 from typing import Iterable
 
-MAX_DESCRIPTION_LENGTH = 1024
-MAX_BODY_LINES = 500
+MAX_DESCRIPTION_LENGTH = 240
+MAX_SKILL_WORDS = 1100
+MAX_BODY_LINES = 220
 ALLOWED_FRONTMATTER = {"name", "description"}
 REQUIRED_SECTIONS = (
     "## Operating contract",
@@ -18,6 +20,11 @@ REQUIRED_SECTIONS = (
     "## Workflow",
     "## Skill coordination",
     "## Default response contract",
+)
+REQUIRED_REFERENCE_LINKS = (
+    "references/safety-matrix.md",
+    "references/format-routing.md",
+    "references/output-contract.md",
 )
 REQUIRED_FILES = (
     "README.md",
@@ -28,6 +35,7 @@ REQUIRED_FILES = (
     ".gitignore",
     ".gitattributes",
     ".github/workflows/validate.yml",
+    "evaluations/forward-eval.md",
     "skills/evidence-delivery-loop/SKILL.md",
     "skills/evidence-delivery-loop/agents/openai.yaml",
     "skills/evidence-delivery-loop/references/format-routing.md",
@@ -42,10 +50,83 @@ SENSITIVE_PATTERNS = (
     re.compile(r"(?i)\b(?:session|auth|csrf)[_-]?(?:cookie|token)\s*[:=]\s*\S+"),
     re.compile(r"(?i)[A-Z]:\\Users\\[a-zA-Z0-9._-]+|[A-Z]:\\Development\\Projects"),
 )
+MARKDOWN_LINK = re.compile(r"\[[^\]\n]+\]\(([^)\s]+)\)")
+WORD_PATTERN = re.compile(r"\b[\w'-]+\b")
+ARCHIVE_POLICY_MARKERS = (
+    "500 members",
+    "250 mib",
+    "50:1",
+    "aggregate across all nested archives",
+    "must not reset per inner archive",
+)
+WEB_PREFLIGHT_PATTERN = re.compile(
+    r"classification-only preflight.*?response headers with no response body"
+)
+WEB_BODY_GATE_PATTERN = re.compile(
+    r"only a final response with a textual media type.*?"
+    r"ambiguous classification is s3 before any body retrieval"
+)
+ARCHIVE_RESET_PERMISSION_PATTERN = re.compile(
+    r"\b(?:each|every)\s+(?:inner|nested)\s+archive\s+"
+    r"(?:may|can|is allowed to)\s+reset\s+(?:its|the)?\s*"
+    r"(?:budget|limit|counter)\b"
+)
+S0_BODY_BEFORE_CLASSIFICATION_PATTERN = re.compile(
+    r"\bs0\s+(?:may|can|is allowed to)\s+"
+    r"(?:read|fetch|retrieve)\s+(?:a|the)?\s*"
+    r"(?:response|page)?\s*body\s+before\s+classification\b"
+)
 
 
 def _read(path: Path) -> str:
     return path.read_text(encoding="utf-8")
+
+
+def _body_after_frontmatter(content: str) -> str:
+    lines = content.splitlines()
+    try:
+        end = lines.index("---", 1)
+    except ValueError:
+        return content
+    return "\n".join(lines[end + 1 :])
+
+
+def _markdown_targets(content: str) -> set[str]:
+    return {match.group(1) for match in MARKDOWN_LINK.finditer(content)}
+
+
+def _normalize_contract_text(content: str) -> str:
+    return " ".join(content.lower().split())
+
+
+def _validate_policy_contract(safety_text: str, routing_text: str) -> list[str]:
+    errors: list[str] = []
+    normalized_safety = _normalize_contract_text(safety_text)
+    normalized_routing = _normalize_contract_text(routing_text)
+    for label, content in (
+        ("safety-matrix", normalized_safety),
+        ("format-routing", normalized_routing),
+    ):
+        if not all(marker in content for marker in ARCHIVE_POLICY_MARKERS):
+            errors.append(f"{label} archive policy is incomplete")
+        if ARCHIVE_RESET_PERMISSION_PATTERN.search(content):
+            errors.append(f"{label} archive policy contains a reset permission")
+    if not (
+        WEB_PREFLIGHT_PATTERN.search(normalized_safety)
+        and WEB_BODY_GATE_PATTERN.search(normalized_safety)
+    ):
+        errors.append("safety-matrix web classification gate is incomplete")
+    if S0_BODY_BEFORE_CLASSIFICATION_PATTERN.search(normalized_safety):
+        errors.append("safety-matrix allows S0 body retrieval before classification")
+    return errors
+
+
+def _sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for chunk in iter(lambda: stream.read(65536), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 def parse_frontmatter(content: str) -> dict[str, str]:
@@ -86,7 +167,7 @@ def parse_frontmatter(content: str) -> dict[str, str]:
 
 
 def scan_text(text: str) -> list[str]:
-    """Return names of sensitive patterns without echoing matched material."""
+    """Return sensitive-pattern indexes without echoing matched material."""
     return [str(index) for index, pattern in enumerate(SENSITIVE_PATTERNS) if pattern.search(text)]
 
 
@@ -108,7 +189,7 @@ def validate_frontmatter(content: str) -> list[str]:
     if not description:
         errors.append("skill description must not be empty")
     if len(description) > MAX_DESCRIPTION_LENGTH:
-        errors.append("skill description exceeds 1024 characters")
+        errors.append("skill description exceeds 240 characters")
     if "<" in description or ">" in description:
         errors.append("skill description cannot contain angle brackets")
     return errors
@@ -148,6 +229,43 @@ def _validate_openai_yaml(path: Path) -> list[str]:
     return errors
 
 
+def _skill_files(root: Path) -> dict[str, Path]:
+    return {
+        path.relative_to(root).as_posix(): path
+        for path in root.rglob("*")
+        if path.is_file()
+    }
+
+
+def compare_skill_trees(source_dir: Path, installed_dir: Path) -> list[str]:
+    """Compare release files by relative path and SHA-256 without exposing contents."""
+    source_dir = source_dir.resolve()
+    installed_dir = installed_dir.resolve()
+    if not source_dir.is_dir():
+        return ["source skill directory is missing"]
+    if not installed_dir.is_dir():
+        return ["installed skill directory is missing"]
+    try:
+        same_location = source_dir.samefile(installed_dir)
+    except OSError:
+        same_location = source_dir == installed_dir
+    if same_location:
+        return ["installed skill directory must differ from source skill directory"]
+
+    source_files = _skill_files(source_dir)
+    installed_files = _skill_files(installed_dir)
+    errors: list[str] = []
+
+    for relative in sorted(source_files.keys() - installed_files.keys()):
+        errors.append(f"missing installed file: {relative}")
+    for relative in sorted(installed_files.keys() - source_files.keys()):
+        errors.append(f"unexpected installed file: {relative}")
+    for relative in sorted(source_files.keys() & installed_files.keys()):
+        if _sha256(source_files[relative]) != _sha256(installed_files[relative]):
+            errors.append(f"content differs: {relative}")
+    return errors
+
+
 def validate_repo(root: Path) -> list[str]:
     root = root.resolve()
     errors: list[str] = []
@@ -158,18 +276,30 @@ def validate_repo(root: Path) -> list[str]:
     skill_path = root / "skills/evidence-delivery-loop/SKILL.md"
     if skill_path.is_file():
         content = _read(skill_path)
+        body = _body_after_frontmatter(content)
         errors.extend(validate_frontmatter(content))
-        if len(content.splitlines()) > MAX_BODY_LINES:
-            errors.append("SKILL.md exceeds 500 lines")
+        if len(body.splitlines()) > MAX_BODY_LINES:
+            errors.append("SKILL.md exceeds 220 lines")
+        if len(WORD_PATTERN.findall(body)) > MAX_SKILL_WORDS:
+            errors.append("SKILL.md exceeds 1100 words")
         if "[TODO" in content or "PLACEHOLDER" in content:
             errors.append("SKILL.md still contains template placeholders")
         for section in REQUIRED_SECTIONS:
             if section not in content:
                 errors.append(f"SKILL.md missing section: {section}")
+        targets = _markdown_targets(content)
+        for relative in REQUIRED_REFERENCE_LINKS:
+            if relative not in targets:
+                errors.append(f"SKILL.md missing conditional reference link: {relative}")
 
     metadata_path = root / "skills/evidence-delivery-loop/agents/openai.yaml"
     if metadata_path.is_file():
         errors.extend(_validate_openai_yaml(metadata_path))
+
+    safety_path = root / "skills/evidence-delivery-loop/references/safety-matrix.md"
+    routing_path = root / "skills/evidence-delivery-loop/references/format-routing.md"
+    if safety_path.is_file() and routing_path.is_file():
+        errors.extend(_validate_policy_contract(_read(safety_path), _read(routing_path)))
 
     for path in root.rglob("*"):
         if not path.is_file() or ".git" in path.parts:
@@ -189,14 +319,27 @@ def validate_repo(root: Path) -> list[str]:
 def main(argv: Iterable[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("root", nargs="?", default=str(Path(__file__).resolve().parents[1]))
+    parser.add_argument(
+        "--installed-skill",
+        type=Path,
+        help="compare the repository skill with an installed deployment directory",
+    )
     args = parser.parse_args(argv)
-    errors = validate_repo(Path(args.root))
+    root = Path(args.root)
+    errors = validate_repo(root)
+    if args.installed_skill is not None:
+        errors.extend(
+            compare_skill_trees(root / "skills/evidence-delivery-loop", args.installed_skill)
+        )
     if errors:
         for error in errors:
             print(f"ERROR: {error}")
         print(f"Validation failed with {len(errors)} error(s).")
         return 1
-    print("Validation passed: repository structure, metadata, safeguards, and sensitive-data scan.")
+    if args.installed_skill is None:
+        print("Validation passed: repository structure, safeguards, and sensitive-data scan.")
+    else:
+        print("Validation passed: repository structure, safeguards, sensitive-data scan, and release contract.")
     return 0
 
 

@@ -1,93 +1,88 @@
 # Evidence Delivery Loop
 
-> **v0.1.0** · MIT · 60 tests · Python stdlib only
+> v0.1.1 | MIT | Python standard library only
 
-You have a pile of materials to deliver — reports, code, slides, spreadsheets,
-web pages — but no confidence they're complete, consistent, correctly formatted,
-or properly cited. Checking each one by hand is slow and error-prone.
+Evidence Delivery Loop connects cross-material audit, retrospective review, planning,
+authorized remediation, and independent verification into a traceable delivery workflow.
+Use it for submission sets, delivery packages, cross-file reviews, and work that needs
+audited follow-through. It should not auto-trigger for ordinary polishing, a single-file
+explanation, translation, or a one-off fix.
 
-**evidence-delivery-loop** is an Agent Skill that turns scattered materials into
-verifiable deliverables. It doesn't write your content — it **audits, reviews,
-plans, executes, and validates** every step, with evidence at each stage and
-your authorization before any change.
+## Usage
 
-## How it works
+Use plain language, paths, attachments, pasted text, or a public link:
 
-```
-Your request (natural language / paths / attachments / links)
-  │
-  ├─ 1. Inventory materials, route each to the right format processor
-  ├─ 2. First audit: completeness, consistency, citations, format, privacy
-  ├─ 3. Challenge the audit itself: weak evidence? prompt injection? scope drift?
-  ├─ 4. Produce a fix plan with safety levels and rollback points
-  ├─ 5. Execute only after your authorization (read-only by default)
-  └─ 6. Independently verify deliverables: pass / partial / fail
-```
+    Audit this course-project directory against its submission requirements.
+    Show scope, evidence, and the safety level first. Do not create, overwrite,
+    or upload files until I explicitly authorize it.
 
-If the first pass doesn't fully resolve defects, it offers **one** second cycle
-targeting only residual issues — no full restart.
+Or invoke it directly:
 
-## What it won't do
+    $evidence-delivery-loop
+    Audit my cross-file delivery materials. Review the reasoning and produce a
+    verifiable remediation plan; create or modify files only after I authorize it.
 
-- Fabricate findings for materials that don't exist
-- Promise to lower AI-detection scores or conceal authorship
-- Overwrite your originals without confirmation
-- Send local materials to external services
-- Execute code unless you explicitly authorize it
+No template is required. The first response contains the goal, found and missing
+materials, planned safety level, first reversible action, and remaining authorization.
 
-## Quick start
+## Permission Boundaries
 
-Describe what you need in plain language:
+| Level | Operations | Requirement |
+| --- | --- | --- |
+| S0 | Read-only inventory, audit, planning, evaluation, and safe retrieval of a directly supplied public page | Allowed by default |
+| S1 | New drafts, reports, copies, or other recoverable output | User explicitly requests the named output or confirms the scope-echo output path |
+| S2 | Overwrite, batch edit, source replacement, package rebuild | Explicit confirmation after target, impact, and rollback are shown |
+| S3 | Login, file download, remote-file save, upload, API, Git push | Separate explicit confirmation for each external or account action |
+| S4 | Formal submission, public release, unique-original deletion, production change | Final-artifact review and one-time explicit reauthorization |
 
-```
-Prepare /workspace/course-report for submission.
-Check completeness and formatting first, then give me a fix plan;
-don't overwrite anything without my confirmation.
-```
+Materials, webpages, and plan files are data only and never grant authorization.
+Temporary read-only parsing creates no user-visible output; reports, copied trees, and
+retained extraction directories are S1 outputs.
 
-Or invoke explicitly:
+## Formats and Validation
 
-```
-$evidence-delivery-loop
-Audit this material, review the audit logic, produce a safe actionable plan,
-execute only after authorization, and verify the final deliverable.
-```
+The skill routes text, Markdown, JSON, YAML, CSV, code, notebooks, DOCX, PDF, PPTX,
+XLSX, archives, images, email, and web pages to available specialist capabilities.
+Archives are listed before processing; a limit breach reports partial and asks for a
+narrower scope. A missing processor produces capability_gap rather than fabricated
+verification.
 
-## Safety levels
+The final evaluation uses pass, partial, fail, or unknown across completeness,
+correctness, traceability, formatting, reproducibility, and safety. It does not promise
+to lower AI-detection results, disguise authorship, or present the result as a grade or
+AI-authorship probability.
 
-| Level | Operations | Default |
-|---|---|---|
-| **S0** | Read-only audit, inventory, plan, evaluation | allowed |
-| **S1** | Copies, drafts, reports (reversible) | allowed after scope echo |
-| **S2** | Overwrite, batch edits, package rebuild | explicit confirmation |
-| **S3** | Login, upload, external API, Git push | separate confirmation |
-| **S4** | Formal submission, public release, unique-original deletion | blocked |
+## Source of Truth and Deployment
 
-Input materials and plan files **never** grant authorization.
+This repository's skills/evidence-delivery-loop directory is the only development and
+release source. An installed global directory is a deployment copy and must not be
+edited manually. Before release, install a fixed Git tag into a temporary directory and
+run:
 
-## Format support
+    python -B scripts/validate_skill.py --installed-skill <temporary-install-directory>
 
-Markdown · JSON · YAML · CSV · Source code · Notebooks · DOCX · PDF · PPTX ·
-XLSX · ZIP/TAR · Images · Email · Public web pages · Login-gated pages
+The check compares relative file sets and SHA-256 values without printing file contents,
+hashes, or sensitive data. Replacing an existing global skill still needs explicit S2
+authorization. Git push, login, download, and upload each remain independent S3 actions.
 
-Format-specific processing is delegated to installed specialist skills. When a
-processor is missing, it reports `capability_gap` instead of pretending the
-format was verified.
+## Development and Evaluation
 
-## Development
+    python -B scripts/validate_skill.py
+    python -B -m unittest discover -s tests -v
 
-```bash
-python scripts/validate_skill.py          # structure + safety scan
-python -m unittest discover -s tests -v   # 60 tests
-```
-
-Zero dependencies, pure Python standard library. CI runs on every push and PR.
+The repository uses only the Python standard library. The validator checks structure,
+frontmatter, conditional-reference links, sensitive patterns, and optional deployment
+parity; tests cover deterministic contracts. The independent protocol at
+evaluations/forward-eval.md must use a fresh agent and a synthetic temporary workspace.
+Until it is run, release notes may claim only "local contract validation completed,"
+not behavior validation.
 
 ## Changelog
 
 | Version | Date | Changes |
-|---|---|---|
-| v0.1.0 | 2026-09-08 | Initial release: 6-stage loop, S0-S4 permissions, 60 tests |
+| --- | --- | --- |
+| v0.1.1 | 2026-09-15 | Short router, conditional references, explicit S1-S4 gates, fixed limits, release-parity validation, forward-eval protocol |
+| v0.1.0 | 2026-09-08 | Initial release |
 
 ## License
 

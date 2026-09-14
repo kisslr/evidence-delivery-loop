@@ -9,6 +9,14 @@ ROUTING = (ROOT / "skills/evidence-delivery-loop/references/format-routing.md").
 OUTPUT = (ROOT / "skills/evidence-delivery-loop/references/output-contract.md").read_text(encoding="utf-8")
 
 
+def normalize_contract_text(text: str) -> str:
+    return " ".join(text.lower().split())
+
+
+NORMALIZED_SKILL = normalize_contract_text(SKILL)
+NORMALIZED_SAFETY = normalize_contract_text(SAFETY)
+
+
 class UntrustedDataPostureTests(unittest.TestCase):
     def test_inputs_treated_as_untrusted_data(self):
         self.assertIn("untrusted data", SKILL)
@@ -26,7 +34,7 @@ class UntrustedDataPostureTests(unittest.TestCase):
 
 class FabricationAndProvenanceTests(unittest.TestCase):
     def test_no_fabrication_without_materials(self):
-        self.assertIn("Do not fabricate findings", SKILL)
+        self.assertIn("do not fabricate findings", NORMALIZED_SKILL)
 
     def test_no_ai_detection_score_claim(self):
         self.assertIn("AI-detection score", SKILL)
@@ -88,17 +96,86 @@ class PermissionBoundaryTests(unittest.TestCase):
         self.assertIn("Default to S0", SKILL)
 
     def test_s4_blocked_by_default(self):
-        self.assertIn("blocked by default", SAFETY)
+        self.assertIn("blocked by default", NORMALIZED_SAFETY)
         self.assertIn("S4", SAFETY)
 
     def test_s3_requires_separate_confirmation(self):
-        self.assertIn("separate confirmation", SAFETY)
+        self.assertIn("separate explicit confirmation", NORMALIZED_SAFETY)
 
     def test_s2_requires_explicit_confirmation(self):
-        self.assertIn("explicit confirmation", SAFETY)
+        self.assertIn("explicit confirmation", NORMALIZED_SAFETY)
 
     def test_authorization_is_operation_specific(self):
         self.assertIn("specific to the named operation", SAFETY)
+
+
+class AuthorizationAndBoundsContractTests(unittest.TestCase):
+    def test_scope_echo_has_all_six_fields(self):
+        for marker in (
+            "Goal:",
+            "Found materials:",
+            "Missing materials:",
+            "Planned safety level:",
+            "First reversible action:",
+            "Authorization still needed:",
+        ):
+            self.assertIn(marker, SKILL, f"scope echo is missing {marker}")
+
+    def test_s1_requires_explicit_output_intent(self):
+        self.assertIn("only when the user explicitly requests", NORMALIZED_SAFETY)
+        self.assertIn("explicitly confirms the scope echo", NORMALIZED_SAFETY)
+        self.assertNotIn("allowed after scope echo", SAFETY)
+
+    def test_public_page_fetch_and_download_have_different_gates(self):
+        self.assertIn("public http(s) page", NORMALIZED_SAFETY)
+        self.assertIn("downloadable binary", NORMALIZED_SAFETY)
+        self.assertIn("separate explicit confirmation", NORMALIZED_SAFETY)
+
+    def test_discovery_limits_are_fixed_and_partial_is_reported(self):
+        for marker in (
+            "maximum depth 8",
+            "500 entries",
+            "100 MiB",
+            "1 GiB",
+            "30 seconds",
+            "partial",
+            "narrow the scope",
+        ):
+            self.assertIn(marker, SAFETY, f"missing discovery limit or stop behavior: {marker}")
+
+    def test_archive_member_manifest_is_listed_before_internal_processing(self):
+        for marker in (
+            "list the archive member manifest first",
+            "500 members",
+            "250 MiB",
+            "50:1",
+            "encrypted",
+            "unrecognized archive",
+        ):
+            self.assertIn(marker, ROUTING, f"missing archive guard: {marker}")
+        self.assertIn("aggregate across all nested archives", NORMALIZED_SAFETY)
+        self.assertIn("must not reset", NORMALIZED_SAFETY)
+        self.assertNotIn("archive directory first", ROUTING.lower())
+
+    def test_s0_web_preflight_classifies_before_body_retrieval(self):
+        for marker in (
+            "classification-only preflight",
+            "response headers",
+            "content-disposition: attachment",
+            "textual media type",
+            "ambiguous classification",
+            "no response body",
+        ):
+            self.assertIn(marker, NORMALIZED_SAFETY, f"missing web-classification guard: {marker}")
+
+    def test_s0_temporary_processing_is_not_a_persistent_output(self):
+        for marker in (
+            "tool-controlled temporary render or parse",
+            "must not modify inputs",
+            "must not leave user-visible output",
+            "S1",
+        ):
+            self.assertIn(marker, SAFETY, f"missing S0 temporary-processing rule: {marker}")
 
 
 class FormatRoutingTests(unittest.TestCase):
@@ -152,7 +229,7 @@ class InjectionResistanceTests(unittest.TestCase):
         self.assertIn("authorized browser session", SKILL)
 
     def test_no_credential_extraction(self):
-        self.assertIn("do not extract passwords", SKILL)
+        self.assertIn("do not extract passwords", NORMALIZED_SKILL)
 
 
 class AbortAndRecoveryTests(unittest.TestCase):
